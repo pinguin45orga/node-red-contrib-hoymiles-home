@@ -1,0 +1,19 @@
+services:
+  node-red:
+    build: .
+    image: node-red-contrib-hoymiles-home-dev
+    ports:
+      - "1880:1880"
+    volumes:
+      # Persistent data (flows, credentials, settings).
+      # Initialised from the image on first run; survives container restarts.
+      - node-red-data:/data
+      # Live-reload: mount source directly so node code changes are reflected
+      # after a container restart (no full rebuild needed).
+      - ./nodes:/usr/src/node-red-contrib-hoymiles-home/nodes:ro
+    environment:
+      NODE_RED_CREDENTIAL_SECRET: "${NODE_RED_CREDENTIAL_SECRET:-hoymiles-dev-secret}"
+    restart: unless-stopped
+
+volumes:
+  node-red-data:

@@ -1,0 +1,92 @@
+<script type="text/javascript">
+    RED.nodes.registerType('hoymiles-watch', {
+        category: 'input',
+        color: '#f0a500',
+        defaults: {
+            name:        { value: '' },
+            server:      { value: '', type: 'hoymiles-config', required: true },
+            sid:         { value: '', required: true, validate: RED.validators.number() },
+            interval:    { value: '' },
+        },
+        inputs: 0,
+        outputs: 1,
+        icon: 'bolt.svg',
+        label: function () {
+            return this.name || `Hoymiles Watch (${this.sid || '?'})`;
+        },
+        labelStyle: function () {
+            return this.name ? 'node_label_italic' : '';
+        },
+        outputLabels: ['live power data'],
+    });
+</script>
+
+<script type="text/html" data-template-name="hoymiles-watch">
+    <div class="form-row">
+        <label for="node-input-name">
+            <i class="fa fa-tag"></i> Name
+        </label>
+        <input type="text" id="node-input-name" placeholder="Hoymiles Watch" />
+    </div>
+    <div class="form-row">
+        <label for="node-input-server">
+            <i class="fa fa-key"></i> Credentials
+        </label>
+        <input type="text" id="node-input-server" />
+    </div>
+    <div class="form-row">
+        <label for="node-input-sid">
+            <i class="fa fa-bolt"></i> Station ID
+        </label>
+        <input type="number" id="node-input-sid" placeholder="e.g. 123456" />
+    </div>
+    <div class="form-row">
+        <label for="node-input-interval">
+            <i class="fa fa-clock-o"></i> Interval (s)
+        </label>
+        <input type="number" id="node-input-interval" placeholder="leave empty to use server value (dly)" min="1" />
+    </div>
+    <div class="form-tips">
+        Leave <b>Interval</b> empty to use the <code>dly</code> field from each server response (matches the S-Miles Home app behaviour).
+    </div>
+</script>
+
+<script type="text/html" data-help-name="hoymiles-watch">
+    <p>Continuously polls the Hoymiles S-Miles Home live power API and emits a message for every new data point.</p>
+
+    <h3>Configuration</h3>
+    <dl class="message-properties">
+        <dt>Credentials</dt>
+        <dd>Select or create a <em>Hoymiles Credentials</em> config node with your API token.</dd>
+        <dt>Station ID</dt>
+        <dd>The numeric station ID (<code>sid</code>). Use the CLI (<code>hoymiles station list</code>) to find it.</dd>
+        <dt>Interval</dt>
+        <dd>Poll interval in seconds. Leave empty to use the <code>dly</code> value returned by the server (recommended — this mirrors the S-Miles Home app).</dd>
+    </dl>
+
+    <h3>Output message</h3>
+    <dl class="message-properties">
+        <dt>payload <span class="property-type">object</span></dt>
+        <dd>
+            Power values from the station:
+            <ul>
+                <li><code>payload.pv</code> – Solar generation (W)</li>
+                <li><code>payload.load</code> – Consumption (W)</li>
+                <li><code>payload.grid</code> – Grid exchange (W, negative = export)</li>
+                <li><code>payload.bat</code> – Battery power (W)</li>
+            </ul>
+        </dd>
+        <dt>topic <span class="property-type">string</span></dt>
+        <dd><code>hoymiles/watch/{sid}</code></dd>
+        <dt>sid <span class="property-type">number</span></dt>
+        <dd>The station ID for this message.</dd>
+    </dl>
+
+    <h3>Status indicators</h3>
+    <ul>
+        <li><span style="color:green">●</span> <b>watching</b> – Polling normally</li>
+        <li><span style="color:yellow">◌</span> <b>connecting / reconnecting</b> – Fetching a fresh live URI</li>
+        <li><span style="color:red">●</span> <b>error</b> – Initial connect failed; check credentials and station ID</li>
+        <li><span style="color:grey">◌</span> <b>stopped</b> – Node was disabled or redeployed</li>
+    </ul>
+</script>

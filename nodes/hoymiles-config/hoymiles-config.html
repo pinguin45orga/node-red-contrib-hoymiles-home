@@ -1,0 +1,47 @@
+<script type="text/javascript">
+    RED.nodes.registerType('hoymiles-config', {
+        category: 'config',
+        defaults: {
+            name: { value: '' },
+        },
+        credentials: {
+            email:    { type: 'text' },
+            password: { type: 'password' },
+        },
+        label: function () {
+            return this.name || this.credentials?.email || 'Hoymiles Account';
+        },
+    });
+</script>
+
+<script type="text/html" data-template-name="hoymiles-config">
+    <div class="form-row">
+        <label for="node-config-input-name">
+            <i class="fa fa-tag"></i> Name
+        </label>
+        <input type="text" id="node-config-input-name" placeholder="Hoymiles Account" />
+    </div>
+    <div class="form-row">
+        <label for="node-config-input-email">
+            <i class="fa fa-envelope"></i> E-Mail
+        </label>
+        <input type="email" id="node-config-input-email" placeholder="you@example.com" />
+    </div>
+    <div class="form-row">
+        <label for="node-config-input-password">
+            <i class="fa fa-lock"></i> Password
+        </label>
+        <input type="password" id="node-config-input-password" placeholder="S-Miles Home password" />
+    </div>
+    <div class="form-tips">
+        Use the same credentials as in the <b>S-Miles Home</b> app.
+        The node logs in automatically and refreshes the session token as needed.
+    </div>
+</script>
+
+<script type="text/html" data-help-name="hoymiles-config">
+    <p>Stores the S-Miles Home login credentials and manages the API session token.</p>
+    <p>On deploy the node performs the same two-step login as the S-Miles Home app
+    (pre-inspection → Argon2ID or MD5·SHA256 encoding → token).</p>
+    <p>The resulting token is shared with all connected <b>hoymiles-watch</b> nodes.</p>
+</script>

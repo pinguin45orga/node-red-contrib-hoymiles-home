@@ -1,0 +1,43 @@
+[
+    {
+        "id": "tab-hoymiles",
+        "type": "tab",
+        "label": "Hoymiles Test",
+        "disabled": false,
+        "info": "1. Open 'Live Power', set credentials (email + password) and station ID\n2. Deploy and watch the Debug sidebar"
+    },
+    {
+        "id": "cfg-hoymiles",
+        "type": "hoymiles-config",
+        "name": "Hoymiles Account"
+    },
+    {
+        "id": "node-watch",
+        "type": "hoymiles-watch",
+        "name": "Live Power",
+        "server": "cfg-hoymiles",
+        "sid": "",
+        "interval": "",
+        "z": "tab-hoymiles",
+        "x": 180,
+        "y": 200,
+        "wires": [["node-debug"]]
+    },
+    {
+        "id": "node-debug",
+        "type": "debug",
+        "name": "Power (W)",
+        "active": true,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": true,
+        "complete": "payload",
+        "targetType": "msg",
+        "statusVal": "payload.pv",
+        "statusType": "msg",
+        "z": "tab-hoymiles",
+        "x": 380,
+        "y": 200,
+        "wires": []
+    }
+]
