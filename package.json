@@ -1,6 +1,6 @@
 {
   "name": "node-red-contrib-hoymiles-home",
-  "version": "0.1.0",
+  "version": "0.1.1-dev.0",
   "description": "Node-RED nodes for Hoymiles S-Miles Home API – live power data watch",
   "author": "Robin Lenz <pinguin45@web.de>",
   "license": "MIT",
