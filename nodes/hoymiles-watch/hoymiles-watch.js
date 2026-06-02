@@ -1,7 +1,5 @@
-const { APIError } = require('../hoymiles-config/hoymiles-config');
-
-const MIN_INTERVAL_MS   = 1000;
-const DEFAULT_DELAY_MS  = 5000;
+const MIN_INTERVAL_MS    = 1000;
+const DEFAULT_DELAY_MS   = 5000;
 const URI_RETRY_DELAY_MS = 3000;
 
 function sleep(ms) {
@@ -53,7 +51,17 @@ module.exports = function (RED) {
             currentTimer = null;
         }
 
-        async function watchLoop(client) {
+        // Re-authenticates via the config node and returns the fresh client.
+        async function reauth() {
+            node.status({ fill: 'yellow', shape: 'ring', text: 're-authenticating…' });
+            await configNode.relogin();
+            return configNode.client;
+        }
+
+        async function watchLoop() {
+            // client is mutable so re-auth can swap it in during the loop
+            let client = configNode.client;
+
             node.status({ fill: 'yellow', shape: 'ring', text: 'connecting…' });
 
             let uri, data;
@@ -79,15 +87,32 @@ module.exports = function (RED) {
                 try {
                     data = await fetchLive(client, uri);
 
-                    // No "flow" field → URI has expired, refresh
+                    // No "flow" field → URI expired, get a fresh one
                     if (!data || !('flow' in data)) {
-                        uri  = await getLiveUri(client);
-                        data = await fetchLive(client, uri);
+                        try {
+                            uri  = await getLiveUri(client);
+                            data = await fetchLive(client, uri);
+                        } catch (uriErr) {
+                            // URI fetch failed → token likely expired, re-authenticate
+                            node.warn(`URI refresh failed (${uriErr.message}) — re-authenticating`);
+                            const fresh = await reauth();
+                            if (fresh) {
+                                client = fresh;
+                                uri    = await getLiveUri(client);
+                                data   = await fetchLive(client, uri);
+                            }
+                        }
                     }
                 } catch (err) {
-                    node.warn(`Poll error: ${err.message} — refreshing URI`);
-                    node.status({ fill: 'yellow', shape: 'ring', text: 'reconnecting…' });
-                    try { uri = await getLiveUri(client); } catch (_) { /* ignore */ }
+                    node.warn(`Poll error: ${err.message} — re-authenticating`);
+                    node.status({ fill: 'yellow', shape: 'ring', text: 're-authenticating…' });
+                    try {
+                        const fresh = await reauth();
+                        if (fresh) {
+                            client = fresh;
+                            uri    = await getLiveUri(client);
+                        }
+                    } catch (_) { /* will retry next iteration */ }
                     await sleep(URI_RETRY_DELAY_MS);
                     node.status({ fill: 'green', shape: 'dot', text: `watching sid=${sid}` });
                 }
@@ -103,7 +128,6 @@ module.exports = function (RED) {
         }
 
         async function start() {
-            // Wait for the config node to finish logging in
             if (configNode._loginReady) {
                 node.status({ fill: 'yellow', shape: 'ring', text: 'authenticating…' });
                 await configNode._loginReady;
@@ -111,11 +135,11 @@ module.exports = function (RED) {
 
             if (!configNode.client) {
                 node.status({ fill: 'red', shape: 'ring', text: 'auth failed' });
-                return; // error already logged by the config node
+                return;
             }
 
             running = true;
-            await watchLoop(configNode.client);
+            await watchLoop();
         }
 
         node.on('close', (done) => { stop(); done(); });

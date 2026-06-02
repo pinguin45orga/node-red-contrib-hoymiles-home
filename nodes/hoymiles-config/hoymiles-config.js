@@ -129,16 +129,24 @@ module.exports = function (RED) {
             return;
         }
 
-        // loginReady resolves (never rejects) once the login attempt finishes.
-        // Dependents await this, then check node.client for success/failure.
-        node._loginReady = loginWithCredentials(email, password)
-            .then(token => {
-                node.client = new HoymilesClient(token);
-                node.log(`Logged in as ${email}`);
-            })
-            .catch(err => {
-                node.error(`Login failed: ${err.message}`);
-            });
+        // doLogin resolves (never rejects) and updates node.client on success.
+        function doLogin(label = 'Login') {
+            const p = loginWithCredentials(email, password)
+                .then(token => {
+                    node.client = new HoymilesClient(token);
+                    node.log(`${label} successful for ${email}`);
+                })
+                .catch(err => {
+                    node.error(`${label} failed: ${err.message}`);
+                });
+            node._loginReady = p;
+            return p;
+        }
+
+        // relogin() can be called by watch nodes when the token has expired.
+        node.relogin = () => doLogin('Re-login');
+
+        doLogin();
     }
 
     RED.nodes.registerType('hoymiles-config', HoymilesConfigNode, {
