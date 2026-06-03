@@ -51,6 +51,11 @@ module.exports = function (RED) {
             currentTimer = null;
         }
 
+        // HTTP 401 or Hoymiles API status '401' → session expired.
+        function isAuthError(err) {
+            return err.response?.status === 401 || err.status === '401';
+        }
+
         // Re-authenticates via the config node and returns the fresh client.
         async function reauth() {
             node.status({ fill: 'yellow', shape: 'ring', text: 're-authenticating…' });
@@ -93,26 +98,33 @@ module.exports = function (RED) {
                             uri  = await getLiveUri(client);
                             data = await fetchLive(client, uri);
                         } catch (uriErr) {
-                            // URI fetch failed → token likely expired, re-authenticate
-                            node.warn(`URI refresh failed (${uriErr.message}) — re-authenticating`);
-                            const fresh = await reauth();
-                            if (fresh) {
-                                client = fresh;
-                                uri    = await getLiveUri(client);
-                                data   = await fetchLive(client, uri);
+                            if (isAuthError(uriErr)) {
+                                node.warn(`URI refresh failed (${uriErr.message}) — re-authenticating`);
+                                const fresh = await reauth();
+                                if (fresh) {
+                                    client = fresh;
+                                    uri    = await getLiveUri(client);
+                                    data   = await fetchLive(client, uri);
+                                }
+                            } else {
+                                node.warn(`URI refresh failed: ${uriErr.message}`);
                             }
                         }
                     }
                 } catch (err) {
-                    node.warn(`Poll error: ${err.message} — re-authenticating`);
-                    node.status({ fill: 'yellow', shape: 'ring', text: 're-authenticating…' });
-                    try {
-                        const fresh = await reauth();
-                        if (fresh) {
-                            client = fresh;
-                            uri    = await getLiveUri(client);
-                        }
-                    } catch (_) { /* will retry next iteration */ }
+                    if (isAuthError(err)) {
+                        node.warn(`Poll error: ${err.message} — re-authenticating`);
+                        try {
+                            const fresh = await reauth();
+                            if (fresh) {
+                                client = fresh;
+                                uri    = await getLiveUri(client);
+                            }
+                        } catch (_) { /* will retry next iteration */ }
+                    } else {
+                        node.warn(`Poll error: ${err.message} — retrying`);
+                        node.status({ fill: 'yellow', shape: 'ring', text: 'reconnecting…' });
+                    }
                     await sleep(URI_RETRY_DELAY_MS);
                     node.status({ fill: 'green', shape: 'dot', text: `watching sid=${sid}` });
                 }
