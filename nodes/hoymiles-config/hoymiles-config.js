@@ -115,7 +115,6 @@ async function loginWithCredentials(email, password) {
 
 const DAILY_LIMIT_MSG = 'The number of logins exceeds the daily maximum limit';
 const INITIAL_RETRY_MS = 10_000;
-const MAX_RETRY_MS     = 300_000; // 5 min
 
 // APIErrors (Hoymiles-level) that are not the daily limit are credential
 // errors (wrong password, unknown account, …) — don't retry those.
@@ -195,7 +194,7 @@ module.exports = function (RED) {
                     // Technical error (network, timeout, HTTP 5xx, …)
                     node.warn(`${label} failed (${err.message}) — retrying in ${retryDelay / 1000}s`);
                     await interruptibleSleep(retryDelay);
-                    retryDelay = Math.min(retryDelay * 2, MAX_RETRY_MS);
+                    retryDelay = retryDelay * 2;
                 }
             }
         }
