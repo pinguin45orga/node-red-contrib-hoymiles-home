@@ -4,6 +4,10 @@
   "description": "Node-RED nodes for Hoymiles S-Miles Home API – live power data watch",
   "author": "Robin Lenz <pinguin45@web.de>",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/pinguin45orga/node-red-contrib-hoymiles-home.git"
+  },
   "keywords": [
     "node-red",
     "hoymiles",
