@@ -111,6 +111,28 @@ async function loginWithCredentials(email, password) {
     return token;
 }
 
+// ── Retry helpers ─────────────────────────────────────────────────────────
+
+const DAILY_LIMIT_MSG = 'The number of logins exceeds the daily maximum limit';
+const INITIAL_RETRY_MS = 10_000;
+const MAX_RETRY_MS     = 300_000; // 5 min
+
+// APIErrors (Hoymiles-level) that are not the daily limit are credential
+// errors (wrong password, unknown account, …) — don't retry those.
+function isCredentialError(err) {
+    return err instanceof APIError && err.message !== DAILY_LIMIT_MSG;
+}
+
+function isDailyLimitError(err) {
+    return err instanceof APIError && err.message === DAILY_LIMIT_MSG;
+}
+
+function msUntilMidnight() {
+    const midnight = new Date();
+    midnight.setHours(24, 5, 0, 0); // next midnight + 5 min buffer
+    return midnight.getTime() - Date.now();
+}
+
 // ── Node-RED registration ──────────────────────────────────────────────────
 
 module.exports = function (RED) {
@@ -125,25 +147,67 @@ module.exports = function (RED) {
 
         if (!email || !password) {
             node.error('Hoymiles config: email and password are required');
-            node._loginReady = Promise.resolve(); // resolve immediately so dependents don't hang
+            node._loginReady = Promise.resolve();
             return;
         }
 
-        // doLogin resolves (never rejects) and updates node.client on success.
-        function doLogin(label = 'Login') {
-            const p = loginWithCredentials(email, password)
-                .then(token => {
+        let cancelled  = false;
+        let wakeUp     = null; // resolves the current sleep early on close
+
+        function interruptibleSleep(ms) {
+            return new Promise(resolve => {
+                const t = setTimeout(resolve, ms);
+                wakeUp = () => { clearTimeout(t); resolve(); };
+            }).then(() => { wakeUp = null; });
+        }
+
+        node.on('close', () => {
+            cancelled = true;
+            if (wakeUp) wakeUp();
+        });
+
+        // Persistent login loop: retries on technical errors, waits until
+        // midnight on daily-limit errors, stops on credential errors.
+        async function loginLoop(label) {
+            let retryDelay = INITIAL_RETRY_MS;
+
+            while (!cancelled) {
+                try {
+                    const token = await loginWithCredentials(email, password);
                     node.client = new HoymilesClient(token);
                     node.log(`${label} successful for ${email}`);
-                })
-                .catch(err => {
-                    node.error(`${label} failed: ${err.message}`);
-                });
+                    return;
+                } catch (err) {
+                    if (isCredentialError(err)) {
+                        node.error(`${label} failed (check credentials): ${err.message}`);
+                        return; // wrong password / unknown account — no retry
+                    }
+
+                    if (isDailyLimitError(err)) {
+                        const ms = msUntilMidnight();
+                        const h  = (ms / 3_600_000).toFixed(1);
+                        node.warn(`Daily login limit reached — retrying in ${h} h`);
+                        await interruptibleSleep(ms);
+                        retryDelay = INITIAL_RETRY_MS; // reset backoff after long wait
+                        continue;
+                    }
+
+                    // Technical error (network, timeout, HTTP 5xx, …)
+                    node.warn(`${label} failed (${err.message}) — retrying in ${retryDelay / 1000}s`);
+                    await interruptibleSleep(retryDelay);
+                    retryDelay = Math.min(retryDelay * 2, MAX_RETRY_MS);
+                }
+            }
+        }
+
+        // doLogin wraps loginLoop so dependents can await _loginReady.
+        // It resolves once login succeeds or gives up (credential error / cancelled).
+        function doLogin(label = 'Login') {
+            const p = loginLoop(label);
             node._loginReady = p;
             return p;
         }
 
-        // relogin() can be called by watch nodes when the token has expired.
         node.relogin = () => doLogin('Re-login');
 
         doLogin();
