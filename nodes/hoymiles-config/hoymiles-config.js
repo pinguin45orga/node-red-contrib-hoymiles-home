@@ -113,13 +113,12 @@ async function loginWithCredentials(email, password) {
 
 // ── Retry helpers ─────────────────────────────────────────────────────────
 
-const DAILY_LIMIT_MSG = 'The number of logins exceeds the daily maximum limit';
+const DAILY_LIMIT_MSG  = 'The number of logins exceeds the daily maximum limit';
+const CREDENTIAL_MSG   = 'Login failed. Please check your account and password.';
 const RETRY_MS = 30_000;
 
-// APIErrors (Hoymiles-level) that are not the daily limit are credential
-// errors (wrong password, unknown account, …) — don't retry those.
 function isCredentialError(err) {
-    return err instanceof APIError && err.message !== DAILY_LIMIT_MSG;
+    return err instanceof APIError && err.message === CREDENTIAL_MSG;
 }
 
 function isDailyLimitError(err) {
