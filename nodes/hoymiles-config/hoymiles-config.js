@@ -113,7 +113,7 @@ async function loginWithCredentials(email, password) {
 
 // ── Retry helpers ─────────────────────────────────────────────────────────
 
-const DAILY_LIMIT_MSG  = 'The number of logins exceeds the daily maximum limit';
+const DAILY_LIMIT_MSG  = 'The number of logins exceeds the daily maximum limit.';
 const CREDENTIAL_MSG   = 'Login failed. Please check your account and password.';
 const RETRY_MS = 30_000;
 
