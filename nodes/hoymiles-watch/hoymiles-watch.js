@@ -1,6 +1,6 @@
 const MIN_INTERVAL_MS    = 1000;
 const DEFAULT_DELAY_MS   = 5000;
-const URI_RETRY_DELAY_MS = 3000;
+const URI_RETRY_DELAY_MS = 10_000;
 
 function sleep(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));
@@ -51,32 +51,60 @@ module.exports = function (RED) {
             currentTimer = null;
         }
 
-        // HTTP 401 or Hoymiles API status '401' → session expired.
         function isAuthError(err) {
             return err.response?.status === 401 || err.status === '401';
         }
 
-        // Re-authenticates via the config node and returns the fresh client.
         async function reauth() {
             node.status({ fill: 'yellow', shape: 'ring', text: 're-authenticating…' });
             await configNode.relogin();
             return configNode.client;
         }
 
+        // Keeps retrying getLiveUri until it succeeds, an auth error occurs,
+        // or the node is stopped. Throws on auth error; returns null if stopped.
+        async function refreshUri(client) {
+            while (running) {
+                try {
+                    return await getLiveUri(client);
+                } catch (err) {
+                    if (isAuthError(err)) throw err;
+                    node.warn(`URI refresh failed: ${err.message} — retrying in ${URI_RETRY_DELAY_MS / 1000}s`);
+                    node.status({ fill: 'yellow', shape: 'ring', text: 'reconnecting…' });
+                    await interruptibleSleep(URI_RETRY_DELAY_MS);
+                }
+            }
+            return null;
+        }
+
         async function watchLoop() {
-            // client is mutable so re-auth can swap it in during the loop
             let client = configNode.client;
 
             node.status({ fill: 'yellow', shape: 'ring', text: 'connecting…' });
 
+            async function reauthAndRefresh() {
+                const fresh = await reauth();
+                if (!fresh) return null;
+                client = fresh;
+                return refreshUri(client);
+            }
+
+            // Initial connect
             let uri, data;
             try {
-                uri  = await getLiveUri(client);
+                uri  = await refreshUri(client);
+                if (!uri) return; // stopped before connecting
                 data = await fetchLive(client, uri);
             } catch (err) {
-                node.error(`Initial connect failed: ${err.message}`);
-                node.status({ fill: 'red', shape: 'dot', text: 'connect error' });
-                return;
+                if (isAuthError(err)) {
+                    uri = await reauthAndRefresh();
+                    if (!uri) return;
+                    data = await fetchLive(client, uri);
+                } else {
+                    node.error(`Initial connect failed: ${err.message}`);
+                    node.status({ fill: 'red', shape: 'dot', text: 'connect error' });
+                    return;
+                }
             }
 
             node.status({ fill: 'green', shape: 'dot', text: `watching sid=${sid}` });
@@ -86,47 +114,29 @@ module.exports = function (RED) {
 
                 const dly = intervalOverride ?? Math.max(MIN_INTERVAL_MS, data?.dly ?? DEFAULT_DELAY_MS);
                 await interruptibleSleep(dly);
-
                 if (!running) break;
 
                 try {
                     data = await fetchLive(client, uri);
 
-                    // No "flow" field → URI expired, get a fresh one
+                    // No "flow" → URI expired, get a fresh one
                     if (!data || !('flow' in data)) {
                         try {
-                            uri  = await getLiveUri(client);
-                            data = await fetchLive(client, uri);
-                        } catch (uriErr) {
-                            if (isAuthError(uriErr)) {
-                                node.warn(`URI refresh failed (${uriErr.message}) — re-authenticating`);
-                                const fresh = await reauth();
-                                if (fresh) {
-                                    client = fresh;
-                                    uri    = await getLiveUri(client);
-                                    data   = await fetchLive(client, uri);
-                                }
-                            } else {
-                                node.warn(`URI refresh failed: ${uriErr.message}`);
-                            }
+                            uri  = await refreshUri(client);
+                            if (uri) data = await fetchLive(client, uri);
+                        } catch (authErr) {
+                            uri = await reauthAndRefresh();
+                            if (uri) data = await fetchLive(client, uri);
                         }
                     }
                 } catch (err) {
                     if (isAuthError(err)) {
-                        node.warn(`Poll error: ${err.message} — re-authenticating`);
-                        try {
-                            const fresh = await reauth();
-                            if (fresh) {
-                                client = fresh;
-                                uri    = await getLiveUri(client);
-                            }
-                        } catch (_) { /* will retry next iteration */ }
+                        try { uri = await reauthAndRefresh(); } catch (_) { /* retry next tick */ }
                     } else {
-                        node.warn(`Poll error: ${err.message} — retrying`);
-                        node.status({ fill: 'yellow', shape: 'ring', text: 'reconnecting…' });
+                        node.warn(`Poll error: ${err.message}`);
+                        try { uri = await refreshUri(client); } catch (_) { /* retry next tick */ }
                     }
-                    await sleep(URI_RETRY_DELAY_MS);
-                    node.status({ fill: 'green', shape: 'dot', text: `watching sid=${sid}` });
+                    if (uri) node.status({ fill: 'green', shape: 'dot', text: `watching sid=${sid}` });
                 }
             }
 
