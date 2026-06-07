@@ -24,9 +24,10 @@ function resolveDomain(path) {
 }
 
 class APIError extends Error {
-    constructor(message, status) {
+    constructor(message, status, raw) {
         super(message);
         this.status = status;
+        this.raw = raw; // full API response body
     }
 }
 
@@ -64,7 +65,7 @@ class HoymilesClient {
         });
         const result = resp.data;
         if (!['0', '100'].includes(String(result.status))) {
-            throw new APIError(result.message || 'Unknown error', String(result.status ?? '???'));
+            throw new APIError(result.message || 'Unknown error', String(result.status ?? '???'), result);
         }
         return result.data;
     }
@@ -109,6 +110,20 @@ async function loginWithCredentials(email, password) {
     const token = data?.token;
     if (!token) throw new Error('Login succeeded but no token in response');
     return token;
+}
+
+// ── Error formatting ──────────────────────────────────────────────────────
+
+function formatError(err) {
+    if (err instanceof APIError) {
+        const raw = err.raw ? ` | raw: ${JSON.stringify(err.raw)}` : '';
+        return `[API status=${err.status}] ${err.message}${raw}`;
+    }
+    if (err.response) {
+        // Axios HTTP error (4xx / 5xx)
+        return `[HTTP ${err.response.status}] ${JSON.stringify(err.response.data)}`;
+    }
+    return err.message;
 }
 
 // ── Retry helpers ─────────────────────────────────────────────────────────
@@ -175,7 +190,7 @@ module.exports = function (RED) {
                     return;
                 } catch (err) {
                     if (isCredentialError(err)) {
-                        node.error(`${label} failed (check credentials): ${err.message}`);
+                        node.error(`${label} failed (check credentials): ${formatError(err)}`);
                         return; // wrong password / unknown account — no retry
                     }
 
@@ -188,7 +203,7 @@ module.exports = function (RED) {
                     }
 
                     // Technical error (network, timeout, HTTP 5xx, …)
-                    node.warn(`${label} failed (${err.message}) — retrying in ${RETRY_MS / 1000}s`);
+                    node.warn(`${label} failed — retrying in ${RETRY_MS / 1000}s: ${formatError(err)}`);
                     await interruptibleSleep(RETRY_MS);
                 }
             }
@@ -217,3 +232,4 @@ module.exports = function (RED) {
 
 module.exports.APIError = APIError;
 module.exports.HoymilesClient = HoymilesClient;
+module.exports.formatError = formatError;

@@ -1,3 +1,5 @@
+const { formatError } = require('../hoymiles-config/hoymiles-config');
+
 const MIN_INTERVAL_MS    = 1000;
 const DEFAULT_DELAY_MS   = 5000;
 const URI_RETRY_DELAY_MS = 10_000;
@@ -69,7 +71,7 @@ module.exports = function (RED) {
                     return await getLiveUri(client);
                 } catch (err) {
                     if (isAuthError(err)) throw err;
-                    node.warn(`URI refresh failed: ${err.message} — retrying in ${URI_RETRY_DELAY_MS / 1000}s`);
+                    node.warn(`URI refresh failed — retrying in ${URI_RETRY_DELAY_MS / 1000}s: ${formatError(err)}`);
                     node.status({ fill: 'yellow', shape: 'ring', text: 'reconnecting…' });
                     await interruptibleSleep(URI_RETRY_DELAY_MS);
                 }
@@ -101,7 +103,7 @@ module.exports = function (RED) {
                     if (!uri) return;
                     data = await fetchLive(client, uri);
                 } else {
-                    node.error(`Initial connect failed: ${err.message}`);
+                    node.error(`Initial connect failed: ${formatError(err)}`);
                     node.status({ fill: 'red', shape: 'dot', text: 'connect error' });
                     return;
                 }
@@ -133,7 +135,7 @@ module.exports = function (RED) {
                     if (isAuthError(err)) {
                         try { uri = await reauthAndRefresh(); } catch (_) { /* retry next tick */ }
                     } else {
-                        node.warn(`Poll error: ${err.message}`);
+                        node.warn(`Poll error: ${formatError(err)}`);
                         try { uri = await refreshUri(client); } catch (_) { /* retry next tick */ }
                     }
                     if (uri) node.status({ fill: 'green', shape: 'dot', text: `watching sid=${sid}` });
