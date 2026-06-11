@@ -3,7 +3,6 @@ const { formatError } = require('../hoymiles-config/hoymiles-config');
 const MIN_INTERVAL_MS       = 1000;
 const DEFAULT_DELAY_MS      = 5000;
 const URI_RETRY_DELAY_MS    = 10_000;
-const REAUTH_AFTER_ATTEMPTS = 5; // proactive reauth after N consecutive URI failures
 
 function sleep(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));
@@ -76,24 +75,15 @@ module.exports = function (RED) {
             }
 
             // Retries getLiveUri until success, auth error, or stopped.
-            // After REAUTH_AFTER_ATTEMPTS consecutive failures, triggers a
-            // proactive reauth — covers tokens that expire without returning 401.
             async function refreshUri() {
-                let attempts = 0;
                 while (running) {
                     try {
                         return await getLiveUri(client);
                     } catch (err) {
                         if (isAuthError(err)) throw err;
-                        attempts++;
                         node.warn(`URI refresh failed — retrying in ${URI_RETRY_DELAY_MS / 1000}s: ${formatError(err)}`);
                         node.status({ fill: 'yellow', shape: 'ring', text: 'reconnecting…' });
                         await interruptibleSleep(URI_RETRY_DELAY_MS);
-
-                        if (attempts % REAUTH_AFTER_ATTEMPTS === 0) {
-                            node.warn(`URI still unavailable after ${attempts} retries — re-authenticating proactively`);
-                            await doReauth();
-                        }
                     }
                 }
                 return null;
