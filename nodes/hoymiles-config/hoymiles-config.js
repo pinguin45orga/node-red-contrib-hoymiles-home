@@ -60,25 +60,24 @@ class HoymilesClient {
     // Returns the full response body (status, message, data, …) without throwing.
     async postRaw(path, data = {}, domain = null) {
         const base = DOMAINS[domain || resolveDomain(path)];
-        const resp = await axios.post(`${base}${path}`, data || {}, {
-            headers: this._headers(),
-            timeout: 30000,
-            maxRedirects: 5,
-        });
-        return resp.data;
+        return this._httpPost(`${base}${path}`, data);
     }
 
     async _doPost(url, data) {
+        const result = await this._httpPost(url, data);
+        if (!['0', '100'].includes(String(result.status))) {
+            throw new APIError(result.message || 'Unknown error', String(result.status ?? '???'), result);
+        }
+        return result.data;
+    }
+
+    async _httpPost(url, data) {
         const resp = await axios.post(url, data, {
             headers: this._headers(),
             timeout: 30000,
             maxRedirects: 5,
         });
-        const result = resp.data;
-        if (!['0', '100'].includes(String(result.status))) {
-            throw new APIError(result.message || 'Unknown error', String(result.status ?? '???'), result);
-        }
-        return result.data;
+        return resp.data;
     }
 }
 
