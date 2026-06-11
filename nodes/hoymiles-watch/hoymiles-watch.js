@@ -34,9 +34,9 @@ module.exports = function (RED) {
         let currentTimer = null;
 
         async function getLiveUri(client) {
-            const data = await client.post('/pvmc/api/0/station/get_sd_uri_c', { sid });
-            const uri = data?.uri;
-            if (!uri) throw new Error(`No live URI returned from get_sd_uri_c — data: ${JSON.stringify(data)}`);
+            const result = await client.postRaw('/pvmc/api/0/station/get_sd_uri_c', { sid });
+            const uri = result?.data?.uri;
+            if (!uri) throw new Error(`No live URI from get_sd_uri_c — full response: ${JSON.stringify(result)}`);
             return uri;
         }
 

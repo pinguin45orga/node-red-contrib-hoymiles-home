@@ -57,6 +57,17 @@ class HoymilesClient {
         return this._doPost(url, data);
     }
 
+    // Returns the full response body (status, message, data, …) without throwing.
+    async postRaw(path, data = {}, domain = null) {
+        const base = DOMAINS[domain || resolveDomain(path)];
+        const resp = await axios.post(`${base}${path}`, data || {}, {
+            headers: this._headers(),
+            timeout: 30000,
+            maxRedirects: 5,
+        });
+        return resp.data;
+    }
+
     async _doPost(url, data) {
         const resp = await axios.post(url, data, {
             headers: this._headers(),
