@@ -1,8 +1,9 @@
 const { formatError } = require('../hoymiles-config/hoymiles-config');
 
-const MIN_INTERVAL_MS    = 1000;
-const DEFAULT_DELAY_MS   = 5000;
-const URI_RETRY_DELAY_MS = 10_000;
+const MIN_INTERVAL_MS       = 1000;
+const DEFAULT_DELAY_MS      = 5000;
+const URI_RETRY_DELAY_MS    = 10_000;
+const REAUTH_AFTER_ATTEMPTS = 5; // proactive reauth after N consecutive URI failures
 
 function sleep(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));
@@ -63,43 +64,51 @@ module.exports = function (RED) {
             return configNode.client;
         }
 
-        // Keeps retrying getLiveUri until it succeeds, an auth error occurs,
-        // or the node is stopped. Throws on auth error; returns null if stopped.
-        async function refreshUri(client) {
-            while (running) {
-                try {
-                    return await getLiveUri(client);
-                } catch (err) {
-                    if (isAuthError(err)) throw err;
-                    node.warn(`URI refresh failed — retrying in ${URI_RETRY_DELAY_MS / 1000}s: ${formatError(err)}`);
-                    node.status({ fill: 'yellow', shape: 'ring', text: 'reconnecting…' });
-                    await interruptibleSleep(URI_RETRY_DELAY_MS);
-                }
-            }
-            return null;
-        }
-
         async function watchLoop() {
+            // client is a closure variable so refreshUri and reauth can mutate it
             let client = configNode.client;
 
             node.status({ fill: 'yellow', shape: 'ring', text: 'connecting…' });
 
-            async function reauthAndRefresh() {
+            async function doReauth() {
                 const fresh = await reauth();
-                if (!fresh) return null;
-                client = fresh;
-                return refreshUri(client);
+                if (fresh) client = fresh;
+            }
+
+            // Retries getLiveUri until success, auth error, or stopped.
+            // After REAUTH_AFTER_ATTEMPTS consecutive failures, triggers a
+            // proactive reauth — covers tokens that expire without returning 401.
+            async function refreshUri() {
+                let attempts = 0;
+                while (running) {
+                    try {
+                        return await getLiveUri(client);
+                    } catch (err) {
+                        if (isAuthError(err)) throw err;
+                        attempts++;
+                        node.warn(`URI refresh failed — retrying in ${URI_RETRY_DELAY_MS / 1000}s: ${formatError(err)}`);
+                        node.status({ fill: 'yellow', shape: 'ring', text: 'reconnecting…' });
+                        await interruptibleSleep(URI_RETRY_DELAY_MS);
+
+                        if (attempts % REAUTH_AFTER_ATTEMPTS === 0) {
+                            node.warn(`URI still unavailable after ${attempts} retries — re-authenticating proactively`);
+                            await doReauth();
+                        }
+                    }
+                }
+                return null;
             }
 
             // Initial connect
             let uri, data;
             try {
-                uri  = await refreshUri(client);
+                uri  = await refreshUri();
                 if (!uri) return; // stopped before connecting
                 data = await fetchLive(client, uri);
             } catch (err) {
                 if (isAuthError(err)) {
-                    uri = await reauthAndRefresh();
+                    await doReauth();
+                    uri = await refreshUri();
                     if (!uri) return;
                     data = await fetchLive(client, uri);
                 } else {
@@ -124,19 +133,20 @@ module.exports = function (RED) {
                     // No "flow" → URI expired, get a fresh one
                     if (!data || !('flow' in data)) {
                         try {
-                            uri  = await refreshUri(client);
+                            uri  = await refreshUri();
                             if (uri) data = await fetchLive(client, uri);
                         } catch (authErr) {
-                            uri = await reauthAndRefresh();
+                            await doReauth();
+                            uri = await refreshUri();
                             if (uri) data = await fetchLive(client, uri);
                         }
                     }
                 } catch (err) {
                     if (isAuthError(err)) {
-                        try { uri = await reauthAndRefresh(); } catch (_) { /* retry next tick */ }
+                        try { await doReauth(); uri = await refreshUri(); } catch (_) { /* retry next tick */ }
                     } else {
                         node.warn(`Poll error: ${formatError(err)}`);
-                        try { uri = await refreshUri(client); } catch (_) { /* retry next tick */ }
+                        try { uri = await refreshUri(); } catch (_) { /* retry next tick */ }
                     }
                     if (uri) node.status({ fill: 'green', shape: 'dot', text: `watching sid=${sid}` });
                 }
