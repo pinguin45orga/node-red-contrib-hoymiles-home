@@ -36,7 +36,14 @@ module.exports = function (RED) {
         async function getLiveUri(client) {
             const result = await client.postRaw('/pvmc/api/0/station/get_sd_uri_c', { sid });
             const uri = result?.data?.uri;
-            if (!uri) throw new Error(`No live URI from get_sd_uri_c — full response: ${JSON.stringify(result)}`);
+            if (!uri) {
+                if (result?.message === 'token verify error.') {
+                    const err = new Error('token verify error');
+                    err.status = '401';
+                    throw err;
+                }
+                throw new Error(`No live URI from get_sd_uri_c — full response: ${JSON.stringify(result)}`);
+            }
             return uri;
         }
 
