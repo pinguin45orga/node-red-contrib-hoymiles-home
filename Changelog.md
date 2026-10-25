@@ -2,6 +2,15 @@
 
 ---
 
+## ✅ Stable v0.2.0 (25.10.2026)
+
+### Neue Funktionen
+- Neuer Node **hoymiles-modules**: liefert Daten für jedes einzelne Solarpanel (Spannung, Strom, Leistung, Tagesertrag) sowie die Temperatur des Wechselrichters, Netzfrequenz und Netzspannung
+- Neue Werte werden etwa alle 5 Minuten bereitgestellt; eine Nachricht wird nur bei einem neuen Datenpunkt gesendet
+- Wechselrichter werden automatisch mit ihrer Seriennummer zugeordnet
+
+---
+
 ## ✅ Stable v0.1.10 (12.06.2026)
 
 ### Fehlerbehebungen
