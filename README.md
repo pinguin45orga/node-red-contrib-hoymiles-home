@@ -57,6 +57,55 @@ Continuously polls live power data for a station and emits one message per readi
 | Red | connect error | Initial connection failed |
 | Grey | stopped | Node stopped / redeployed |
 
+### `hoymiles-modules` (input node)
+
+Polls per-panel (DC input) and per-inverter data — voltage, current, power and daily energy of every panel plus inverter temperature, grid frequency and grid voltage. The DTU uploads this data to the cloud about every 5 minutes; a message is only sent when a new data point is available.
+
+**Configuration:**
+
+| Field | Description |
+|---|---|
+| Credentials | Select a `hoymiles-config` node |
+| Station ID | Numeric station ID (`sid`) |
+| Interval (min) | Poll interval in minutes (default 5, minimum 1) |
+
+**Output `msg.payload`:**
+
+```json
+{
+  "date": "2026-10-25",
+  "time": "09:40",
+  "timestamp": "2026-10-25T08:40:00.000Z",
+  "power": 803.5,
+  "inverters": [
+    {
+      "id": 32840040,
+      "sn": "1610A0319AEB",
+      "name": null,
+      "time": "09:40",
+      "temperature": 21,
+      "frequency": 49.99,
+      "gridVoltage": 232.1,
+      "panels": [
+        { "port": 1, "voltage": 36.6, "current": 13.02, "power": 473.8, "energyToday": 366, "faultCode": 1 },
+        { "port": 2, "voltage": 33.4, "current": 9.85,  "power": 329.7, "energyToday": 212, "faultCode": 1 }
+      ]
+    }
+  ]
+}
+```
+
+| Field | Description |
+|---|---|
+| `time` / `timestamp` | Time of the data point (`timestamp` is interpreted in the Node-RED host's time zone) |
+| `power` | Sum of all panels (W) |
+| `inverters[].temperature` | Inverter temperature (°C) |
+| `inverters[].frequency` | Grid frequency (Hz) |
+| `inverters[].gridVoltage` | Grid voltage (V); three-phase inverters additionally report `gridVoltageB` / `gridVoltageC` |
+| `inverters[].panels[]` | One entry per DC input: `voltage` (V), `current` (A), `power` (W), `energyToday` (Wh), `faultCode` |
+
+**Additional message properties:** `msg.topic` = `hoymiles/modules/{sid}`, `msg.sid` = station ID.
+
 ## Installation
 
 ```bash

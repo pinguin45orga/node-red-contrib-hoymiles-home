@@ -20,7 +20,8 @@
     "version": ">=3.0.0",
     "nodes": {
       "hoymiles-config": "nodes/hoymiles-config/hoymiles-config.js",
-      "hoymiles-watch": "nodes/hoymiles-watch/hoymiles-watch.js"
+      "hoymiles-watch": "nodes/hoymiles-watch/hoymiles-watch.js",
+      "hoymiles-modules": "nodes/hoymiles-modules/hoymiles-modules.js"
     }
   },
   "dependencies": {

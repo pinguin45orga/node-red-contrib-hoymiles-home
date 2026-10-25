@@ -4,7 +4,7 @@
         "type": "tab",
         "label": "Hoymiles Test",
         "disabled": false,
-        "info": "1. Open 'Live Power', set credentials (email + password) and station ID\n2. Deploy and watch the Debug sidebar"
+        "info": "1. Open 'Live Power' and 'Panels', set credentials (email + password) and station ID\n2. Deploy and watch the Debug sidebar"
     },
     {
         "id": "cfg-hoymiles",
@@ -21,7 +21,11 @@
         "z": "tab-hoymiles",
         "x": 180,
         "y": 200,
-        "wires": [["node-debug"]]
+        "wires": [
+            [
+                "node-debug"
+            ]
+        ]
     },
     {
         "id": "node-debug",
@@ -38,6 +42,39 @@
         "z": "tab-hoymiles",
         "x": 380,
         "y": 200,
+        "wires": []
+    },
+    {
+        "id": "node-modules",
+        "type": "hoymiles-modules",
+        "name": "Panels",
+        "server": "cfg-hoymiles",
+        "sid": "",
+        "interval": "",
+        "z": "tab-hoymiles",
+        "x": 180,
+        "y": 280,
+        "wires": [
+            [
+                "node-debug-modules"
+            ]
+        ]
+    },
+    {
+        "id": "node-debug-modules",
+        "type": "debug",
+        "name": "Panels",
+        "active": true,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": true,
+        "complete": "payload",
+        "targetType": "msg",
+        "statusVal": "payload.power",
+        "statusType": "msg",
+        "z": "tab-hoymiles",
+        "x": 380,
+        "y": 280,
         "wires": []
     }
 ]

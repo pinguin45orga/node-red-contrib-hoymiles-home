@@ -63,6 +63,24 @@ class HoymilesClient {
         return this._httpPost(`${base}${path}`, data);
     }
 
+    // For endpoints that answer with binary data (e.g. gzipped protobuf).
+    // Returns a Buffer; JSON error bodies are thrown as APIError.
+    async postBinary(path, data = {}, domain = null) {
+        const base = DOMAINS[domain || resolveDomain(path)];
+        const resp = await axios.post(`${base}${path}`, data, {
+            headers: this._headers(),
+            timeout: 30000,
+            maxRedirects: 5,
+            responseType: 'arraybuffer',
+        });
+        const buf = Buffer.from(resp.data);
+        if (String(resp.headers['content-type'] || '').includes('json') || buf[0] === 0x7b /* '{' */) {
+            const result = JSON.parse(buf.toString('utf8'));
+            throw new APIError(result.message || 'Unknown error', String(result.status ?? '???'), result);
+        }
+        return buf;
+    }
+
     async _doPost(url, data) {
         const result = await this._httpPost(url, data);
         if (!['0', '100'].includes(String(result.status))) {

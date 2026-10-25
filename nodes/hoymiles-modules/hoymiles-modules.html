@@ -1,0 +1,98 @@
+<script type="text/javascript">
+    RED.nodes.registerType('hoymiles-modules', {
+        category: 'input',
+        color: '#f0a500',
+        defaults: {
+            name:        { value: '' },
+            server:      { value: '', type: 'hoymiles-config', required: true },
+            sid:         { value: '', required: true, validate: RED.validators.number() },
+            interval:    { value: '' },
+        },
+        inputs: 0,
+        outputs: 1,
+        icon: 'font-awesome/fa-th-large',
+        label: function () {
+            return this.name || `Hoymiles Modules (${this.sid || '?'})`;
+        },
+        labelStyle: function () {
+            return this.name ? 'node_label_italic' : '';
+        },
+        outputLabels: ['panel & inverter data'],
+    });
+</script>
+
+<script type="text/html" data-template-name="hoymiles-modules">
+    <div class="form-row">
+        <label for="node-input-name">
+            <i class="fa fa-tag"></i> Name
+        </label>
+        <input type="text" id="node-input-name" placeholder="Hoymiles Modules" />
+    </div>
+    <div class="form-row">
+        <label for="node-input-server">
+            <i class="fa fa-key"></i> Credentials
+        </label>
+        <input type="text" id="node-input-server" />
+    </div>
+    <div class="form-row">
+        <label for="node-input-sid">
+            <i class="fa fa-bolt"></i> Station ID
+        </label>
+        <input type="number" id="node-input-sid" placeholder="e.g. 123456" />
+    </div>
+    <div class="form-row">
+        <label for="node-input-interval">
+            <i class="fa fa-clock-o"></i> Interval (min)
+        </label>
+        <input type="number" id="node-input-interval" placeholder="5" min="1" />
+    </div>
+    <div class="form-tips">
+        The DTU uploads panel data to the cloud about every <b>5 minutes</b>. A message is only sent when a new data point is available, so shorter intervals just reduce latency.
+    </div>
+</script>
+
+<script type="text/html" data-help-name="hoymiles-modules">
+    <p>Polls per-panel (DC input) and per-inverter data — including inverter temperature — from the Hoymiles S-Miles Home cloud and emits a message for every new data point.</p>
+
+    <h3>Configuration</h3>
+    <dl class="message-properties">
+        <dt>Credentials</dt>
+        <dd>Select or create a <em>Hoymiles Credentials</em> config node.</dd>
+        <dt>Station ID</dt>
+        <dd>The numeric station ID (<code>sid</code>).</dd>
+        <dt>Interval</dt>
+        <dd>Poll interval in minutes (default 5, minimum 1).</dd>
+    </dl>
+
+    <h3>Output message</h3>
+    <dl class="message-properties">
+        <dt>payload <span class="property-type">object</span></dt>
+        <dd>
+            <ul>
+                <li><code>payload.date</code>, <code>payload.time</code>, <code>payload.timestamp</code> – Time of the data point</li>
+                <li><code>payload.power</code> – Sum of all panels (W)</li>
+                <li><code>payload.inverters[]</code> – One entry per inverter:
+                    <ul>
+                        <li><code>id</code>, <code>sn</code>, <code>name</code></li>
+                        <li><code>temperature</code> – Inverter temperature (°C)</li>
+                        <li><code>frequency</code> – Grid frequency (Hz)</li>
+                        <li><code>gridVoltage</code> – Grid voltage (V)</li>
+                        <li><code>panels[]</code> – One entry per DC input: <code>port</code>, <code>voltage</code> (V), <code>current</code> (A), <code>power</code> (W), <code>energyToday</code> (Wh), <code>faultCode</code></li>
+                    </ul>
+                </li>
+            </ul>
+        </dd>
+        <dt>topic <span class="property-type">string</span></dt>
+        <dd><code>hoymiles/modules/{sid}</code></dd>
+        <dt>sid <span class="property-type">number</span></dt>
+        <dd>The station ID for this message.</dd>
+    </dl>
+
+    <h3>Status indicators</h3>
+    <ul>
+        <li><span style="color:green">●</span> <b>hh:mm · W</b> – Time and total power of the last data point</li>
+        <li><span style="color:grey">●</span> <b>no data yet</b> – No data for today (e.g. before sunrise)</li>
+        <li><span style="color:red">◌</span> <b>poll error</b> – Last request failed; retried on the next interval</li>
+        <li><span style="color:grey">◌</span> <b>stopped</b> – Node was disabled or redeployed</li>
+    </ul>
+</script>
